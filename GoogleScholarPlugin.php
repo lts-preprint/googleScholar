@@ -199,14 +199,19 @@ class GoogleScholarPlugin extends GenericPlugin
         }
 
         // Galley links
+        // Google Scholar expects only one citation_pdf_url pointing to the full-text PDF
         $galleys = $publication->getData('galleys');
-        foreach ($galleys as $i => $galley) {
+        $hasPdfUrl = false;
+        $hasHtmlUrl = false;
+        foreach ($galleys as $galley) {
             $submissionFileId = $galley->getData('submissionFileId');
             if ($submissionFileId && $submissionFile = Repo::submissionFile()->get($submissionFileId)) {
-                if ($submissionFile->getData('mimetype') == 'application/pdf') {
-                    $templateMgr->addHeader('googleScholarPdfUrl' . $i++, '<meta name="citation_pdf_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'download', [$submissionBestId, $galley->getBestGalleyId()], urlLocaleForPage: '') . '"/>');
-                } elseif ($submissionFile->getData('mimetype') == 'text/html') {
-                    $templateMgr->addHeader('googleScholarHtmlUrl' . $i++, '<meta name="citation_fulltext_html_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId, $galley->getBestGalleyId()], urlLocaleForPage: '') . '"/>');
+                if ($submissionFile->getData('mimetype') == 'application/pdf' && !$hasPdfUrl) {
+                    $templateMgr->addHeader('googleScholarPdfUrl', '<meta name="citation_pdf_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'download', [$submissionBestId, $galley->getBestGalleyId()], urlLocaleForPage: '') . '"/>');
+                    $hasPdfUrl = true;
+                } elseif ($submissionFile->getData('mimetype') == 'text/html' && !$hasHtmlUrl) {
+                    $templateMgr->addHeader('googleScholarFullTextHtmlUrl', '<meta name="citation_fulltext_html_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId, $galley->getBestGalleyId()], urlLocaleForPage: '') . '"/>');
+                    $hasHtmlUrl = true;
                 }
             }
         }
@@ -215,7 +220,7 @@ class GoogleScholarPlugin extends GenericPlugin
         $citations = $publication->getData('citations') ?? [];
         Hook::call('GoogleScholarPlugin::references', [&$citations, $submission->getId()]);
         foreach ($citations as $i => $citation) {
-            $templateMgr->addHeader('googleScholarReference' . $i++, '<meta name="citation_reference" content="' . htmlspecialchars($citation->getRawCitation()) . '"/>');
+            $templateMgr->addHeader('googleScholarReference' . $i, '<meta name="citation_reference" content="' . htmlspecialchars($citation->getRawCitation()) . '"/>');
         }
 
         return false;
