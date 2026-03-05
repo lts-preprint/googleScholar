@@ -106,7 +106,12 @@ class GoogleScholarPlugin extends GenericPlugin
             $templateMgr->addHeader('googleScholarPublisher', '<meta name="citation_publisher" content="' . htmlspecialchars($context->getName($context->getPrimaryLocale())) . '"/>');
         }
 
-        $publication = $submission->getCurrentPublication();
+        // Use the publication passed from the handler (the displayed published version),
+        // not getCurrentPublication() which may point to an unpublished draft
+        $hookPublication = $applicationName == 'ojs2' ? ($args[3] ?? null) : ($args[2] ?? null);
+        $publication = ($hookPublication && (int)$hookPublication->getData('status') === \PKP\submission\PKPSubmission::STATUS_PUBLISHED)
+            ? $hookPublication
+            : $submission->getCurrentPublication();
         $publicationLocale = $publication->getData('locale');
         $submissionBestId = $publication->getData('urlPath') ?? $submission->getId();
 
@@ -181,9 +186,10 @@ class GoogleScholarPlugin extends GenericPlugin
         // Subjects
         if ($subjects = $publication->getData('subjects', $publicationLocale)) {
             foreach ($subjects as $i => $subject) {
+                $subjectName = is_array($subject) ? ($subject['name'] ?? $subject[0] ?? '') : (string) $subject;
                 $templateMgr->addHeader(
                     'googleScholarSubject' . $i,
-                    '<meta name="citation_keywords" xml:lang="' . htmlspecialchars(LocaleConversion::toBcp47($publicationLocale)) . '" content="' . htmlspecialchars($subject['name']) . '"/>'
+                    '<meta name="citation_keywords" xml:lang="' . htmlspecialchars(LocaleConversion::toBcp47($publicationLocale)) . '" content="' . htmlspecialchars($subjectName) . '"/>'
                 );
             }
         }
@@ -191,29 +197,26 @@ class GoogleScholarPlugin extends GenericPlugin
         // Keywords
         if ($keywords = $publication->getData('keywords', $publicationLocale)) {
             foreach ($keywords as $i => $keyword) {
+                $keywordName = is_array($keyword) ? ($keyword['name'] ?? $keyword[0] ?? '') : (string) $keyword;
                 $templateMgr->addHeader(
                     'googleScholarKeyword' . $i,
-                    '<meta name="citation_keywords" xml:lang="' . htmlspecialchars(LocaleConversion::toBcp47($publicationLocale)) . '" content="' . htmlspecialchars($keyword['name']) . '"/>'
+                    '<meta name="citation_keywords" xml:lang="' . htmlspecialchars(LocaleConversion::toBcp47($publicationLocale)) . '" content="' . htmlspecialchars($keywordName) . '"/>'
                 );
             }
         }
 
         // Galley links
         // Google Scholar expects only one citation_pdf_url pointing to the full-text PDF
-        $galleys = $publication->getData('galleys');
-        $hasPdfUrl = false;
-        $hasHtmlUrl = false;
-        foreach ($galleys as $galley) {
-            $submissionFileId = $galley->getData('submissionFileId');
-            if ($submissionFileId && $submissionFile = Repo::submissionFile()->get($submissionFileId)) {
-                if ($submissionFile->getData('mimetype') == 'application/pdf' && !$hasPdfUrl) {
-                    $templateMgr->addHeader('googleScholarPdfUrl', '<meta name="citation_pdf_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'download', [$submissionBestId, $galley->getBestGalleyId()], urlLocaleForPage: '') . '"/>');
-                    $hasPdfUrl = true;
-                } elseif ($submissionFile->getData('mimetype') == 'text/html' && !$hasHtmlUrl) {
-                    $templateMgr->addHeader('googleScholarFullTextHtmlUrl', '<meta name="citation_fulltext_html_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId, $galley->getBestGalleyId()], urlLocaleForPage: '') . '"/>');
-                    $hasHtmlUrl = true;
-                }
-            }
+        // Query the first galley directly via DB to avoid LazyCollection issues
+        $firstGalleyRow = \Illuminate\Support\Facades\DB::table('publication_galleys')
+            ->where('publication_id', $publication->getId())
+            ->orderBy('seq', 'asc')
+            ->orderBy('galley_id', 'asc')
+            ->first();
+
+        if ($firstGalleyRow) {
+            $galleyBestId = $firstGalleyRow->url_path ?? $firstGalleyRow->galley_id;
+            $templateMgr->addHeader('googleScholarPdfUrl', '<meta name="citation_pdf_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'download', [$submissionBestId, $galleyBestId], urlLocaleForPage: '') . '"/>');
         }
 
         // Citations
