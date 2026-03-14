@@ -160,7 +160,9 @@ class GoogleScholarPlugin extends GenericPlugin
         }
         if ($applicationName == 'ops') {
             if ($datePublished = $publication->getData('datePublished')) {
-                $templateMgr->addHeader('googleScholarDate', '<meta name="citation_online_date" content="' . date('Y/m/d', strtotime($datePublished)) . '"/>');
+                $templateMgr->addHeader('googleScholarDate', '<meta name="citation_date" content="' . date('Y/m/d', strtotime($datePublished)) . '"/>');
+                $templateMgr->addHeader('googleScholarOnlineDate', '<meta name="citation_online_date" content="' . date('Y/m/d', strtotime($datePublished)) . '"/>');
+                $templateMgr->addHeader('googleScholarPubDate', '<meta name="citation_publication_date" content="' . date('Y/m/d', strtotime($datePublished)) . '"/>');
             }
         }
 
@@ -182,6 +184,24 @@ class GoogleScholarPlugin extends GenericPlugin
         if ($abstract = $publication->getLocalizedData('abstract', $publicationLocale)) {
             $templateMgr->addHeader('googleScholarAbstract', '<meta name="citation_abstract" xml:lang="' . htmlspecialchars(LocaleConversion::toBcp47($publicationLocale)) . '" content="' . htmlspecialchars(strip_tags($abstract)) . '"/>');
         }
+
+        // Open Graph tags for social sharing and SEO
+        $articleUrl = $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId], urlLocaleForPage: '');
+        $articleTitle = htmlspecialchars($publication->getLocalizedFullTitle($publicationLocale));
+        $articleDescription = $abstract ? htmlspecialchars(mb_substr(strip_tags($abstract), 0, 200, 'utf-8')) : '';
+
+        $templateMgr->addHeader('ogTitle', '<meta property="og:title" content="' . $articleTitle . '"/>');
+        $templateMgr->addHeader('ogDescription', '<meta property="og:description" content="' . $articleDescription . '"/>');
+        $templateMgr->addHeader('ogUrl', '<meta property="og:url" content="' . $articleUrl . '"/>');
+        $templateMgr->addHeader('ogType', '<meta property="og:type" content="article"/>');
+
+        if ($datePublished = $publication->getData('datePublished')) {
+            $templateMgr->addHeader('ogPublishedTime', '<meta property="article:published_time" content="' . date('c', strtotime($datePublished)) . '"/>');
+        }
+
+        // Twitter Card for better SEO
+        $templateMgr->addHeader('twitterCard', '<meta name="twitter:card" content="summary_large_image"/>');
+        $templateMgr->addHeader('twitterTitle', '<meta name="twitter:title" content="' . $articleTitle . '"/>');
 
         // Subjects
         if ($subjects = $publication->getData('subjects', $publicationLocale)) {
@@ -225,6 +245,49 @@ class GoogleScholarPlugin extends GenericPlugin
         foreach ($citations as $i => $citation) {
             $templateMgr->addHeader('googleScholarReference' . $i, '<meta name="citation_reference" content="' . htmlspecialchars($citation->getRawCitation()) . '"/>');
         }
+
+        // JSON-LD Schema.org structured data for better SEO
+        $articleUrl = $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId], urlLocaleForPage: '');
+        $articleTitle = $publication->getLocalizedFullTitle($publicationLocale);
+        $articleAbstract = $publication->getLocalizedData('abstract', $publicationLocale) ?? '';
+
+        // Build author array for JSON-LD
+        $authorData = [];
+        foreach ($authors as $author) {
+            $authorItem = ['@type' => 'Person', 'name' => $author->getFullName(false, false, $publicationLocale)];
+            $affiliations = $author->getAffiliations();
+            if (!empty($affiliations)) {
+                $authorItem['affiliation'] = [];
+                foreach ($affiliations as $affiliation) {
+                    $authorItem['affiliation'][] = ['@type' => 'Organization', 'name' => $affiliation->getLocalizedName($publicationLocale)];
+                }
+            }
+            $authorData[] = $authorItem;
+        }
+
+        $jsonLd = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ScholarlyArticle',
+            'headline' => $articleTitle,
+            'abstract' => strip_tags($articleAbstract),
+            'url' => $articleUrl,
+            'author' => $authorData,
+            'datePublished' => $publication->getData('datePublished'),
+            'dateModified' => $publication->getData('lastModified') ?? $publication->getData('datePublished'),
+        ];
+
+        // Add publisher
+        $jsonLd['publisher'] = [
+            '@type' => 'Organization',
+            'name' => $context->getName($context->getPrimaryLocale())
+        ];
+
+        // Add DOI if available
+        if ($doi = $publication->getDoi()) {
+            $jsonLd['identifier'] = ['@type' => 'PropertyValue', 'name' => 'doi', 'value' => $doi];
+        }
+
+        $templateMgr->addHeader('jsonLdSchema', '<script type="application/ld+json">' . json_encode($jsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>');
 
         return false;
     }
