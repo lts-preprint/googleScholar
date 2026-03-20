@@ -178,15 +178,15 @@ class GoogleScholarPlugin extends GenericPlugin
         }
 
         // Abstract URL
-        $templateMgr->addHeader('googleScholarHtmlUrl', '<meta name="citation_abstract_html_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId], urlLocaleForPage: '') . '"/>');
+        $templateMgr->addHeader('googleScholarHtmlUrl', '<meta name="citation_abstract_html_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId], urlLocaleForPage: $publicationLocale) . '"/>');
 
         // Abstract
         if ($abstract = $publication->getLocalizedData('abstract', $publicationLocale)) {
-            $templateMgr->addHeader('googleScholarAbstract', '<meta name="citation_abstract" xml:lang="' . htmlspecialchars(LocaleConversion::toBcp47($publicationLocale)) . '" content="' . htmlspecialchars(strip_tags($abstract)) . '"/>');
+            $templateMgr->addHeader('googleScholarAbstract', '<meta name="citation_abstract" content="' . htmlspecialchars(strip_tags($abstract)) . '"/>');
         }
 
         // Open Graph tags for social sharing and SEO
-        $articleUrl = $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId], urlLocaleForPage: '');
+        $articleUrl = $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId], urlLocaleForPage: $publicationLocale);
         $articleTitle = htmlspecialchars($publication->getLocalizedFullTitle($publicationLocale));
         $articleDescription = $abstract ? htmlspecialchars(mb_substr(strip_tags($abstract), 0, 200, 'utf-8')) : '';
 
@@ -209,7 +209,7 @@ class GoogleScholarPlugin extends GenericPlugin
                 $subjectName = is_array($subject) ? ($subject['name'] ?? $subject[0] ?? '') : (string) $subject;
                 $templateMgr->addHeader(
                     'googleScholarSubject' . $i,
-                    '<meta name="citation_keywords" xml:lang="' . htmlspecialchars(LocaleConversion::toBcp47($publicationLocale)) . '" content="' . htmlspecialchars($subjectName) . '"/>'
+                    '<meta name="citation_keywords" content="' . htmlspecialchars($subjectName) . '"/>'
                 );
             }
         }
@@ -220,7 +220,7 @@ class GoogleScholarPlugin extends GenericPlugin
                 $keywordName = is_array($keyword) ? ($keyword['name'] ?? $keyword[0] ?? '') : (string) $keyword;
                 $templateMgr->addHeader(
                     'googleScholarKeyword' . $i,
-                    '<meta name="citation_keywords" xml:lang="' . htmlspecialchars(LocaleConversion::toBcp47($publicationLocale)) . '" content="' . htmlspecialchars($keywordName) . '"/>'
+                    '<meta name="citation_keywords" content="' . htmlspecialchars($keywordName) . '"/>'
                 );
             }
         }
@@ -236,7 +236,7 @@ class GoogleScholarPlugin extends GenericPlugin
 
         if ($firstGalleyRow) {
             $galleyBestId = $firstGalleyRow->url_path ?? $firstGalleyRow->galley_id;
-            $templateMgr->addHeader('googleScholarPdfUrl', '<meta name="citation_pdf_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'download', [$submissionBestId, $galleyBestId], urlLocaleForPage: '') . '"/>');
+            $templateMgr->addHeader('googleScholarPdfUrl', '<meta name="citation_pdf_url" content="' . $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'download', [$submissionBestId, $galleyBestId], urlLocaleForPage: $publicationLocale) . '"/>');
         }
 
         // Citations
@@ -247,7 +247,7 @@ class GoogleScholarPlugin extends GenericPlugin
         }
 
         // JSON-LD Schema.org structured data for better SEO
-        $articleUrl = $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId], urlLocaleForPage: '');
+        $articleUrl = $request->getDispatcher()->url($request, PKPApplication::ROUTE_PAGE, null, $submissionPath, 'view', [$submissionBestId], urlLocaleForPage: $publicationLocale);
         $articleTitle = $publication->getLocalizedFullTitle($publicationLocale);
         $articleAbstract = $publication->getLocalizedData('abstract', $publicationLocale) ?? '';
 
